@@ -68,9 +68,9 @@ class MainActivity : AppCompatActivity() {
         modelNode = ArModelNode(sceneView.engine,PlacementMode.INSTANT).apply {
             // Platziert das Modell in der Scene
             loadModelGlbAsync(
-                glbFileLocation = "models/japanese_monkey.glb",
-                scaleToUnits = 1f,
-                centerOrigin = Position(-0.5f)
+                glbFileLocation = "models/toon_parrot.glb",
+                scaleToUnits = 0.7f, //3 für parrot und monkey, 0.7 für toon monkey
+                //centerOrigin = Position(-0.5f)
 
             )
             {
