@@ -6,6 +6,19 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/speechBubble"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hallo, ich bin Polly der Papagei!"
+        android:textSize="20sp"
+        android:fontFamily="@font/comic_reg"
+    android:textColor="#000000"
+    android:background="@drawable/speech_bubble"
+    android:visibility="gone"
+    android:layout_gravity="center"
+    android:padding="20dp"
+    android:elevation="12dp"/>
     <io.github.sceneview.ar.ArSceneView
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
