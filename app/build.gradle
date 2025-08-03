@@ -43,5 +43,6 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     // 3D and ARCore
     implementation 'io.github.sceneview:arsceneview:0.10.0'
+   // implementation 'io.github.sceneview:sceneview:0.10.5'
 
 }

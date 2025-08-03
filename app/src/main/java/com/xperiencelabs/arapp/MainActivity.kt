@@ -1,163 +1,181 @@
 package com.xperiencelabs.arapp
 
-import android.content.Context
-import android.graphics.BitmapFactory
 import android.media.MediaPlayer
-import android.net.Uri
-import android.opengl.Visibility
-import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.widget.TextView
-import androidx.core.content.ContentProviderCompat.requireContext
-import androidx.core.view.isGone
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.ar.core.Config
+import android.os.*
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.view.LayoutInflater
-import java.util.*
-// Sceneview Imports
-
+import android.util.Log
+import android.view.View
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isGone
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.ar.core.AugmentedImage
+import com.google.ar.core.AugmentedImageDatabase
+import com.google.ar.core.Config
+import com.google.ar.core.TrackingState
 import io.github.sceneview.ar.ArSceneView
 import io.github.sceneview.ar.node.ArModelNode
-import io.github.sceneview.ar.node.AugmentedImageNode
 import io.github.sceneview.ar.node.PlacementMode
-import io.github.sceneview.material.setExternalTexture
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
+import io.github.sceneview.node.CameraNode
 import io.github.sceneview.node.VideoNode
-import io.github.sceneview.node.ViewNode
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
-    // sceneView ist die AR-Anzeige-Oberfläche, auf der Inhalte platziert werden
     private lateinit var sceneView: ArSceneView
-    // placeButton ist die Schaltfläche, um ein Modell zu platzieren.
     lateinit var placeButton: ExtendedFloatingActionButton
-    // Das 3D-Modell (z.B. Vogel)
+    private lateinit var findApeButton: ExtendedFloatingActionButton
+
     private lateinit var modelNode: ArModelNode
-    // Das Video-Modell (z.B. Ad)
     private lateinit var videoNode: VideoNode
-    // Steuert die Videowiedergabe im videoNode
-    private lateinit var mediaPlayer:MediaPlayer
-    // Papagei redet
+    private lateinit var mediaPlayer: MediaPlayer
     private lateinit var speechBubble: TextView
-    // sprechender Papagei
     private lateinit var tts: TextToSpeech
+    private var apeAlreadyPlaced = false
 
-
-    // wird beim Start der App aufgerufen
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Lädt das Layout mit der AR-Ansicht und der Schaltfläche.
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialisiert das AR-Sichtfeld
-        // und deaktiviert die Lichtschätzung (Lichtverhältnisse aus Kamera ignorieren)
-        sceneView = findViewById<ArSceneView?>(R.id.sceneView).apply {
-            this.lightEstimationMode = Config.LightEstimationMode.DISABLED
-        }
-        // Initialisiert das Textfeld für die Papagei
-        speechBubble = findViewById(R.id.speechBubble)
+        sceneView = findViewById(R.id.sceneView)
 
-        // vorlesen
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts.language = Locale.GERMAN
+        // Direkt und sicher konfigurieren
+        sceneView.configureSession { session, config ->
+            try {
+                val inputStream = assets.open("augmentedimages/marker_affe.imgdb")
+                val db = AugmentedImageDatabase.deserialize(session, inputStream)
+                config.augmentedImageDatabase = db
+                Log.d("AR_DEBUG", "Image-Datenbank erfolgreich geladen!")
+            } catch (e: Exception) {
+                Log.e("AR_DEBUG", "Fehler beim Laden der Image-Datenbank: ${e.message}")
             }
         }
-        // Initialisiert die Videowiedergabe
-        //mediaPlayer = MediaPlayer.create(this,R.raw.ad)
+        speechBubble = findViewById(R.id.speechBubble)
 
-        // Initialisiert den Button für das Platzieren des Modells
+        tts = TextToSpeech(this) {
+            if (it == TextToSpeech.SUCCESS) tts.language = Locale.GERMAN
+        }
+
         placeButton = findViewById(R.id.place)
-
-        // Setzt einen Klick-Listener auf Button
         placeButton.setOnClickListener {
-            // Platziert das Modell
             placeModel()
         }
 
+        findApeButton = findViewById(R.id.btnFindApe)
+        findApeButton.setOnClickListener {
+            resetScene()
+            checkOnceForApe()
+        }
 
         val arrowNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
-            loadModelGlbAsync(
-                glbFileLocation = "models/arrow.glb",
-                scaleToUnits = 0.5f
-            )
-            position = Position(x = 0.5f, y = 0f, z = -1.0f) // Richtung bestimmen
-            rotation = Rotation(x = 0f, y = 90f, z = 0f) // z.B. nach rechts drehend
+            loadModelGlbAsync("models/arrow.glb", scaleToUnits = 0.5f)
+            position = Position(x = 0.5f, y = 0f, z = -1.0f)
+            rotation = Rotation(0f, 90f, 0f)
         }
         sceneView.addChild(arrowNode)
 
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                // optional: Sprech-Animation starten
-            }
-
+            override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
                 if (utteranceId == "polly_done") {
-                    // Modell austauschen – das muss auf dem UI-Thread passieren!
-                    runOnUiThread {
-                        replaceModelWithFlyingPolly()
-                    }
+                    runOnUiThread { replaceModelWithFlyingPolly() }
                 }
             }
 
-            override fun onError(utteranceId: String?) {
-                // Fehlerbehandlung (optional)
-            }
+            override fun onError(utteranceId: String?) {}
         })
-        /*
-        // Initialisiert das Video-Modell
-        videoNode = VideoNode(sceneView.engine, scaleToUnits = 0.7f, centerOrigin = Position(y=-4f), glbFileLocation = "models/plane.glb", player = mediaPlayer, onLoaded = {_,_ ->
-            // Startet die Videowiedergabe
-            mediaPlayer.start()
-        })
-        */
-        // Initialisiert das 3D-Modell
-        modelNode = ArModelNode(sceneView.engine,PlacementMode.INSTANT).apply {
-            // Platziert das Modell in der Scene
-            loadModelGlbAsync(
-                glbFileLocation = "models/toon_parrot.glb",
-                scaleToUnits = 0.7f, //3 für parrot und monkey, 0.7 für toon monkey
-                //centerOrigin = Position(f)
 
-
-            )
-            { modelNode.rotation = Rotation(0f, 280f, 0f) // richtung in die papagei guckt
-                // Setzt die Farbe des Modells
-                //sceneView.planeRenderer.isVisible = true
-                //val materialInstance = it.materialInstances[0]
+        modelNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
+            loadModelGlbAsync("models/toon_parrot.glb", scaleToUnits = 0.7f) {
+                modelNode.rotation = Rotation(0f, 280f, 0f)
             }
-
-            // Setzt einen Klick-Listener auf das Modell
             onAnchorChanged = {
                 placeButton.isGone = it != null
             }
-
         }
-        // Fügt das Modell zur Scene hinzu
         sceneView.addChild(modelNode)
-        // Fügt das Video-Modell zur Scene hinzu
-        //modelNode.addChild(videoNode)
-        // Lade das Layou
+    }
+    private fun checkOnceForApe() {
+        Log.d("AR_DEBUG", "🔍 Starte Marker-Scan...")
 
+        val handler = Handler(Looper.getMainLooper())
+        var attempt = 0
+        val maxAttempts = 20  // Versuche erhöhen für mehr Robustheit
+
+        val scanRunnable = object : Runnable {
+            override fun run() {
+                try {
+                    val frame = sceneView.arSession?.update()
+                    if (frame == null) {
+                        Log.d("AR_DEBUG", "⚠️ Kein Frame erhalten.")
+                        handler.postDelayed(this, 300)
+                        return
+                    }
+
+                    val images = frame.getUpdatedTrackables(AugmentedImage::class.java)
+
+                    if (images.isEmpty()) {
+                        Log.d("AR_DEBUG", "🔄 Versuch $attempt – Keine Trackables gefunden.")
+                    } else {
+                        for (image in images) {
+                            Log.d("AR_DEBUG", "📸 Versuch $attempt – Bild: ${image.name} | Status: ${image.trackingState}")
+
+                            val imageName = image.name.lowercase()
+                            if (image.trackingState == TrackingState.TRACKING &&
+                                (imageName.contains("affe"))) {
+
+                                Log.d("AR_DEBUG", "✅ Marker erkannt & platziert: ${image.name}")
+                                placeApeOnImage(image)
+                                return
+                            }
+
+                            if (image.trackingState == TrackingState.PAUSED) {
+                                Log.d("AR_DEBUG", "⏸️ Marker erkannt, aber noch nicht stabil.")
+                            }
+                        }
+                    }
+
+                    attempt++
+                    if (attempt < maxAttempts) {
+                        handler.postDelayed(this, 300)  // alle 300 ms neu prüfen
+                    } else {
+                        Log.d("AR_DEBUG", "❌ Marker wurde nach $maxAttempts Versuchen nicht erkannt.")
+                    }
+
+                } catch (e: Exception) {
+                    Log.e("AR_DEBUG", "🚨 Fehler beim Marker-Scan: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        handler.post(scanRunnable)
     }
 
-    // Platziert das Modell
+
+
+
+    private fun resetScene() {
+        sceneView.children.filter { it !is CameraNode }.forEach {
+            sceneView.removeChild(it)
+        }
+        apeAlreadyPlaced = false
+        speechBubble.visibility = View.GONE
+        tts.stop()
+    }
+
     private fun placeModel() {
         modelNode.anchor()
 
-        // 1. Zeigt den ersten Text und spricht ihn
         val firstText = "Hallo! Ich bin Polly. Ich zeige dir heute etwas Spannendes!"
         speechBubble.text = firstText
         speechBubble.visibility = View.VISIBLE
         tts.speak(firstText, TextToSpeech.QUEUE_FLUSH, null, null)
 
-        // 2. Nach 4 Sekunden: neuer Text + erneut sprechen
         Handler(Looper.getMainLooper()).postDelayed({
             val secondText = "Folg mir, um den Affen zu entdecken!"
             speechBubble.text = secondText
@@ -168,23 +186,17 @@ class MainActivity : AppCompatActivity() {
                 "polly_done"
             )
         }, 8000)
+
         val followText = "Schau da vorne! Der Affe ist in dieser Richtung!"
         speechBubble.text = followText
         tts.speak(followText, TextToSpeech.QUEUE_FLUSH, null, null)
-
-       // sceneView.planeRenderer.isVisible = false
     }
 
     private fun replaceModelWithFlyingPolly() {
-        // Entferne altes Modell
         sceneView.removeChild(modelNode)
 
-        // Neues Modell
         val monkeyNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
-            loadModelGlbAsync(
-                glbFileLocation = "models/parrot.glb",
-                scaleToUnits = 3f
-            ) {
+            loadModelGlbAsync("models/parrot.glb", scaleToUnits = 3f) {
                 sceneView.planeRenderer.isVisible = true
             }
         }
@@ -192,14 +204,30 @@ class MainActivity : AppCompatActivity() {
         sceneView.addChild(monkeyNode)
     }
 
-    override fun onPause() {
-        super.onPause()
-        //mediaPlayer.stop()
-    }
-    override fun onDestroy() {
-        super.onDestroy()
-        //mediaPlayer.release()
-        tts.shutdown()
+    private fun placeApeOnImage(image: AugmentedImage) {
+        Log.d("AR_DEBUG", "placeApeOnImage aufgerufen für ${image.name}")
+        if (apeAlreadyPlaced) return
+
+        val anchor = image.createAnchor(image.centerPose)
+
+        val monkeyNode = ArModelNode(sceneView.engine).apply {
+            this.anchor = anchor
+            loadModelGlbAsync("models/monkey.glb", scaleToUnits = 0.5f)
+            position = Position(y = 0.05f)
+        }
+
+        sceneView.addChild(monkeyNode)
+        apeAlreadyPlaced = true
+
+        Toast.makeText(this, "Affe gefunden!", Toast.LENGTH_SHORT).show()
     }
 
+    override fun onPause() {
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        tts.shutdown()
+    }
 }
