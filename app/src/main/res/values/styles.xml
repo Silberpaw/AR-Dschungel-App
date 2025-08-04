@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="QuizButtonStyle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">@font/comic_reg</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:layout_marginBottom">16dp</item>
+        <item name="android:backgroundTint">#FFECB3</item>
+        <item name="android:textColor">#4E342E</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:background">@drawable/rounded_button</item>
+    </style>
+
+</resources>

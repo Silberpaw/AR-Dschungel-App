@@ -1,16 +1,19 @@
 package com.xperiencelabs.arapp
 
+import android.content.Intent
 import android.media.MediaPlayer
 import android.os.*
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.View
+import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isGone
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.ar.core.Anchor
 import com.google.ar.core.AugmentedImage
 import com.google.ar.core.AugmentedImageDatabase
 import com.google.ar.core.Config
@@ -36,24 +39,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var speechBubble: TextView
     private lateinit var tts: TextToSpeech
     private var apeAlreadyPlaced = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         sceneView = findViewById(R.id.sceneView)
 
-        // Direkt und sicher konfigurieren
+        // 💡 Direkt beim Konfigurieren: Marker-Datenbank laden und setzen
         sceneView.configureSession { session, config ->
             try {
                 val inputStream = assets.open("augmentedimages/marker_affe.imgdb")
                 val db = AugmentedImageDatabase.deserialize(session, inputStream)
                 config.augmentedImageDatabase = db
-                Log.d("AR_DEBUG", "Image-Datenbank erfolgreich geladen!")
+                Log.d("AR_DEBUG", "📦 Marker-Datenbank erfolgreich geladen")
             } catch (e: Exception) {
-                Log.e("AR_DEBUG", "Fehler beim Laden der Image-Datenbank: ${e.message}")
+                Log.e("AR_DEBUG", "❌ Fehler beim Laden der Image-Datenbank: ${e.message}")
             }
         }
+
         speechBubble = findViewById(R.id.speechBubble)
 
         tts = TextToSpeech(this) {
@@ -63,6 +66,12 @@ class MainActivity : AppCompatActivity() {
         placeButton = findViewById(R.id.place)
         placeButton.setOnClickListener {
             placeModel()
+        }
+
+        val startQuizButton = findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz)
+        startQuizButton.setOnClickListener {
+            val intent = Intent(this, QuizActivity::class.java)
+            startActivity(intent)
         }
 
         findApeButton = findViewById(R.id.btnFindApe)
@@ -99,6 +108,7 @@ class MainActivity : AppCompatActivity() {
         }
         sceneView.addChild(modelNode)
     }
+
     private fun checkOnceForApe() {
         Log.d("AR_DEBUG", "🔍 Starte Marker-Scan...")
 
@@ -220,6 +230,11 @@ class MainActivity : AppCompatActivity() {
         apeAlreadyPlaced = true
 
         Toast.makeText(this, "Affe gefunden!", Toast.LENGTH_SHORT).show()
+
+        // 🎉 Zeige "Quiz starten"-Button, verstecke die anderen
+        findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz).visibility = View.VISIBLE
+        findViewById<ExtendedFloatingActionButton>(R.id.btnFindApe).visibility = View.GONE
+        findViewById<ExtendedFloatingActionButton>(R.id.place).visibility = View.GONE
     }
 
     override fun onPause() {
