@@ -1,227 +1,242 @@
 package com.xperiencelabs.arapp
-
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.*
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import android.view.MotionEvent
 import android.view.View
-import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.isGone
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.ar.core.Anchor
 import com.google.ar.core.AugmentedImage
 import com.google.ar.core.AugmentedImageDatabase
-import com.google.ar.core.Config
 import com.google.ar.core.TrackingState
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import io.github.sceneview.ar.ArSceneView
 import io.github.sceneview.ar.node.ArModelNode
 import io.github.sceneview.ar.node.PlacementMode
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.node.CameraNode
-import io.github.sceneview.node.VideoNode
+import io.github.sceneview.renderable.Renderable
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var sceneView: ArSceneView
-    lateinit var placeButton: ExtendedFloatingActionButton
-    private lateinit var findApeButton: ExtendedFloatingActionButton
+    private lateinit var sceneView: ArSceneView // hält die ARCore-Session, rendert Kamera & 3D-Content
+    private lateinit var modelNode: ArModelNode // repräsentiert ein 3D-Modell
+    private lateinit var speechBubble: TextView // zeigt den Text an
+    private lateinit var tts: TextToSpeech // Text to Speech
+    private lateinit var findApeButton: ExtendedFloatingActionButton // Button um Affen zu finden
+    private lateinit var quizLauncher: ActivityResultLauncher<Intent> // startet QuizActivity
 
-    private lateinit var modelNode: ArModelNode
-    private lateinit var videoNode: VideoNode
-    private lateinit var mediaPlayer: MediaPlayer
-    private lateinit var speechBubble: TextView
-    private lateinit var tts: TextToSpeech
-    private var apeAlreadyPlaced = false
+    private var arrowNode: ArModelNode? = null // zeigt einen Pfeil an
+    private var arrowAnimator: ValueAnimator? = null // animiert den Pfeil
+
+    private var apeAlreadyPlaced = false // um Affen nur einmal zu platzieren
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         sceneView = findViewById(R.id.sceneView)
 
-        // 💡 Direkt beim Konfigurieren: Marker-Datenbank laden und setzen
         sceneView.configureSession { session, config ->
             try {
-                val inputStream = assets.open("augmentedimages/marker_affe.imgdb")
-                val db = AugmentedImageDatabase.deserialize(session, inputStream)
-                config.augmentedImageDatabase = db
-                Log.d("AR_DEBUG", "📦 Marker-Datenbank erfolgreich geladen")
-            } catch (e: Exception) {
-                Log.e("AR_DEBUG", "❌ Fehler beim Laden der Image-Datenbank: ${e.message}")
+                val inputStream = assets.open("augmentedimages/marker_affe.imgdb") // Pfad zur Bilddatenbank
+                val db = AugmentedImageDatabase.deserialize(session, inputStream) // Bilddatenbank laden
+                config.augmentedImageDatabase = db // Bilddatenbank für Session
+            } catch (e: Exception) { // Fehler beim Laden der Bilddatenbank
             }
         }
-
-        speechBubble = findViewById(R.id.speechBubble)
-
-        tts = TextToSpeech(this) {
-            if (it == TextToSpeech.SUCCESS) tts.language = Locale.GERMAN
-        }
-
-        placeButton = findViewById(R.id.place)
-        placeButton.setOnClickListener {
-            placeModel()
-        }
-
-        val startQuizButton = findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz)
-        startQuizButton.setOnClickListener {
-            val intent = Intent(this, QuizActivity::class.java)
-            startActivity(intent)
-        }
-
-        findApeButton = findViewById(R.id.btnFindApe)
-        findApeButton.setOnClickListener {
-            resetScene()
-            checkOnceForApe()
-        }
-
-        val arrowNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
-            loadModelGlbAsync("models/arrow.glb", scaleToUnits = 0.5f)
-            position = Position(x = 0.5f, y = 0f, z = -1.0f)
-            rotation = Rotation(0f, 90f, 0f)
-        }
-        sceneView.addChild(arrowNode)
-
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {
-                if (utteranceId == "polly_done") {
-                    runOnUiThread { replaceModelWithFlyingPolly() }
-                }
-            }
-
-            override fun onError(utteranceId: String?) {}
-        })
-
-        modelNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
-            loadModelGlbAsync("models/toon_parrot.glb", scaleToUnits = 0.7f) {
-                modelNode.rotation = Rotation(0f, 280f, 0f)
-            }
-            onAnchorChanged = {
-                placeButton.isGone = it != null
+        quizLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) { // wenn Quiz erfolgreich beendet
+                // Nach bestandenem Quiz: Button auf "Meine Sammlung" umstellen
+                updateButtonToCollection() // Button anpassen
             }
         }
-        sceneView.addChild(modelNode)
+        speechBubble = findViewById(R.id.speechBubble) // zeigt den Text an
+
+        tts = TextToSpeech(this) { // Text to Speech initialisieren
+            if (it == TextToSpeech.SUCCESS) tts.language = Locale.GERMAN // Sprache einstellen
+        }
+
+        findApeButton = findViewById(R.id.btnFindApe) // Button um Affen zu finden
+        findApeButton.visibility = View.GONE // Button ausblenden
+        findApeButton.setOnClickListener { // Button Klick-Listener
+            resetScene() // zurücksetzen
+            checkOnceForApe() // Affen suchen
+        }
+
+        val startQuizButton = findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz) // Button um Quiz zu starten
+        startQuizButton.visibility = View.GONE   // erst zeigen, wenn Affe gefunden
+
+
+        startIntroWithPolly() // Intro mit Polly starten
     }
 
-    private fun checkOnceForApe() {
-        Log.d("AR_DEBUG", "🔍 Starte Marker-Scan...")
+    private fun startIntroWithPolly() {
+        modelNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply { // Modell laden
+            loadModelGlbAsync("models/toon_parrot.glb", scaleToUnits = 0.7f) { // Modell laden
+                rotation = Rotation(0f, 280f, 0f) // Modell drehen
+                speakIntro() // Intro mit Polly sprechen
+            }
+            onTap = { motionEvent: MotionEvent, i: Renderable? ->
+                runPollyTutorial() // Tutorial mit Polly
+            }
+        }
+        sceneView.addChild(modelNode) // Modell in die Szene platzieren
+    }
 
+    private fun speakIntro() {
+        val introText = "Hallo! Ich bin Polly. Ich bin hier um dir zu helfen. Klick mich an, um die Entdeckung zu starten!"
+        speechBubble.text = introText // Text in Bubble setzen
+        speechBubble.visibility = View.VISIBLE // Sprechblase Sichtbar
+        tts.speak(introText, TextToSpeech.QUEUE_FLUSH, null, null) // Text mit Polly sprechen
+    }
+
+    private fun replacePollyWithFlyingVersion() {
+        sceneView.removeChild(modelNode) // Modell aus Szene entfernen
+
+        val flyingPollyNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply { // Flying Modell laden
+            loadModelGlbAsync("models/parrot.glb", scaleToUnits = 3f) { // Flying Modell laden
+                sceneView.planeRenderer.isVisible = true
+            }
+            position = Position(0f, 0f, -1f) // Position
+        }
+
+        sceneView.addChild(flyingPollyNode) // Flying Modell in Szene platzieren
+    }
+    private fun runPollyTutorial() {
+        tts.stop() // Polly stoppen, falls Kind wiederholung will
+        val firstText = "Lass uns das nächste Tier finden!"
+        speechBubble.text = firstText // Sprachblase auf ersten text setzen
+        tts.speak(firstText, TextToSpeech.QUEUE_FLUSH, null, null) // Sprachblase mit Polly sprechen
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            val secondText = "Folg mir, um den Affen zu entdecken!"
+            speechBubble.text = secondText // zweiter text
+            tts.speak(secondText, TextToSpeech.QUEUE_FLUSH, null, null)
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                val followText = "Hast du ein Symbol entdeckt? Dann klicke unten auf 'Tier finden'! und rufe es herbei."
+                speechBubble.text = followText // dritter text
+                tts.speak(followText, TextToSpeech.QUEUE_FLUSH, null, null)
+
+                findApeButton.visibility = View.VISIBLE
+
+                //  Polly durch fliegendes Modell ersetzen
+                replacePollyWithFlyingVersion() // fliegendes Modell laden
+                showArrow() // 3D-Pfeil anzeigen
+
+
+            }, 7000) // delay damit natürlichere Pausen da sind
+        }, 6000) // dito
+    }
+
+    private fun updateButtonToCollection() {
+        val startQuizButton = findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz)
+        startQuizButton.text = "Meine Sammlung" // Button anpassen
+        startQuizButton.setIconResource(R.drawable.baseline_pets_24)
+        startQuizButton.setOnClickListener {
+            startActivity(Intent(this, CollectionActivity::class.java))
+        }
+    }
+
+    // Methode checkt op Affensymbol in Kamera gezeigt wird
+    private fun checkOnceForApe() {
+
+        startScanAnimation() // Animation starten
         val handler = Handler(Looper.getMainLooper())
-        var attempt = 0
-        val maxAttempts = 20  // Versuche erhöhen für mehr Robustheit
+        var attempt = 0 //versuch
+        val maxAttempts = 20 //max versuche
+
+        val img = findViewById<ImageView>(R.id.imgScanning)
+        val scanHint = findViewById<TextView>(R.id.scanHint)
+
+        img.visibility = View.VISIBLE
+        scanHint.visibility = View.VISIBLE
+        scanHint.text = "Ich suche nach dem Tiersymbol... Pass auf, dass das Bild gut sichtbar ist!"
+
+
+
+        tts.speak("Zeig mir den Affen gut sichtbar in die Kamera!", TextToSpeech.QUEUE_FLUSH, null, null)
+
 
         val scanRunnable = object : Runnable {
             override fun run() {
                 try {
-                    val frame = sceneView.arSession?.update()
-                    if (frame == null) {
-                        Log.d("AR_DEBUG", "⚠️ Kein Frame erhalten.")
+                    val frame = sceneView.arSession?.update() ?: run {
                         handler.postDelayed(this, 300)
                         return
                     }
 
-                    val images = frame.getUpdatedTrackables(AugmentedImage::class.java)
+                    val images = frame.getUpdatedTrackables(AugmentedImage::class.java) // Bilder aus Frame holen
 
-                    if (images.isEmpty()) {
-                        Log.d("AR_DEBUG", "🔄 Versuch $attempt – Keine Trackables gefunden.")
+                    if (images.isEmpty()) { //wenn images leer sind
+                        // nix
                     } else {
                         for (image in images) {
-                            Log.d("AR_DEBUG", "📸 Versuch $attempt – Bild: ${image.name} | Status: ${image.trackingState}")
-
                             val imageName = image.name.lowercase()
-                            if (image.trackingState == TrackingState.TRACKING &&
-                                (imageName.contains("affe"))) {
 
-                                Log.d("AR_DEBUG", "✅ Marker erkannt & platziert: ${image.name}")
-                                placeApeOnImage(image)
+                            if (image.trackingState == TrackingState.TRACKING && imageName.contains("affe")) {
+                                placeApeOnImage(image) // platziert Affe auf augmented image anchor
                                 return
                             }
 
                             if (image.trackingState == TrackingState.PAUSED) {
-                                Log.d("AR_DEBUG", "⏸️ Marker erkannt, aber noch nicht stabil.")
                             }
                         }
                     }
 
                     attempt++
+
+                    if (attempt == 5) {
+                        tts.speak(
+                            "Vielleicht ist das Bild zu nah oder zu dunkel. Versuch es bitte noch einmal!",
+                            TextToSpeech.QUEUE_ADD,
+                            null,
+                            null
+                        )
+
+                        // ⏸ Längere Pause: z. B. 3000ms (3 Sekunden)
+                        handler.postDelayed(this, 5000)
+                        return
+                    }
+
                     if (attempt < maxAttempts) {
-                        handler.postDelayed(this, 300)  // alle 300 ms neu prüfen
+                        handler.postDelayed(this, 300)
                     } else {
-                        Log.d("AR_DEBUG", "❌ Marker wurde nach $maxAttempts Versuchen nicht erkannt.")
+                        // UI aufräumen
+                        findViewById<ImageView>(R.id.imgScanning).visibility = View.GONE
+                        findViewById<TextView>(R.id.scanHint).visibility = View.GONE
                     }
 
                 } catch (e: Exception) {
-                    Log.e("AR_DEBUG", "🚨 Fehler beim Marker-Scan: ${e.message}")
                     e.printStackTrace()
                 }
             }
         }
 
         handler.post(scanRunnable)
-    }
+        findViewById<ImageView>(R.id.imgScanning).visibility = View.GONE
+        findViewById<TextView>(R.id.scanHint).visibility = View.GONE
 
-
-
-
-    private fun resetScene() {
-        sceneView.children.filter { it !is CameraNode }.forEach {
-            sceneView.removeChild(it)
-        }
-        apeAlreadyPlaced = false
-        speechBubble.visibility = View.GONE
-        tts.stop()
-    }
-
-    private fun placeModel() {
-        modelNode.anchor()
-
-        val firstText = "Hallo! Ich bin Polly. Ich zeige dir heute etwas Spannendes!"
-        speechBubble.text = firstText
-        speechBubble.visibility = View.VISIBLE
-        tts.speak(firstText, TextToSpeech.QUEUE_FLUSH, null, null)
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            val secondText = "Folg mir, um den Affen zu entdecken!"
-            speechBubble.text = secondText
-            tts.speak(
-                secondText,
-                TextToSpeech.QUEUE_FLUSH,
-                Bundle().apply { putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "polly_done") },
-                "polly_done"
-            )
-        }, 8000)
-
-        val followText = "Schau da vorne! Der Affe ist in dieser Richtung!"
-        speechBubble.text = followText
-        tts.speak(followText, TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    private fun replaceModelWithFlyingPolly() {
-        sceneView.removeChild(modelNode)
-
-        val monkeyNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
-            loadModelGlbAsync("models/parrot.glb", scaleToUnits = 3f) {
-                sceneView.planeRenderer.isVisible = true
-            }
-        }
-
-        sceneView.addChild(monkeyNode)
     }
 
     private fun placeApeOnImage(image: AugmentedImage) {
-        Log.d("AR_DEBUG", "placeApeOnImage aufgerufen für ${image.name}")
-        if (apeAlreadyPlaced) return
+        if (apeAlreadyPlaced) return // Affe schon platziert
 
-        val anchor = image.createAnchor(image.centerPose)
-
-        val monkeyNode = ArModelNode(sceneView.engine).apply {
-            this.anchor = anchor
+        val anchor = image.createAnchor(image.centerPose) // anchor auf bild
+        val monkeyNode = ArModelNode(sceneView.engine).apply { // platziert Affe
+            this.anchor = anchor // anchor setzen
             loadModelGlbAsync("models/monkey.glb", scaleToUnits = 0.5f)
             position = Position(y = 0.05f)
         }
@@ -229,20 +244,137 @@ class MainActivity : AppCompatActivity() {
         sceneView.addChild(monkeyNode)
         apeAlreadyPlaced = true
 
-        Toast.makeText(this, "Affe gefunden!", Toast.LENGTH_SHORT).show()
+        //  Tier in Sammlung speichern
+        val prefs = getSharedPreferences("animal_collection", MODE_PRIVATE) // Tiercollection
+        prefs.edit().putBoolean("affe", true).apply() // Tiercollection updaten
+        val stars = prefs.getInt("stars", 0) // Sterne
+        prefs.edit().putInt("stars", stars + 1).apply() // Sterne updaten
 
-        // 🎉 Zeige "Quiz starten"-Button, verstecke die anderen
-        findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz).visibility = View.VISIBLE
-        findViewById<ExtendedFloatingActionButton>(R.id.btnFindApe).visibility = View.GONE
-        findViewById<ExtendedFloatingActionButton>(R.id.place).visibility = View.GONE
+        // Polly & UI anpassen
+        sceneView.removeChild(modelNode)
+        speechBubble.visibility = View.GONE
+
+        removeArrow()
+
+        Toast.makeText(this, "Affe gefunden!", Toast.LENGTH_SHORT).show() // Toast
+        val foundText = "Juhu! Du hast den Affen gefunden!"
+        speechBubble.text = foundText
+        speechBubble.visibility = View.VISIBLE
+        tts.speak(foundText, TextToSpeech.QUEUE_FLUSH, null, null)
+
+
+        val startQuizButton = findViewById<ExtendedFloatingActionButton>(R.id.btnStartQuiz) // Button um Quiz zu starten
+        startQuizButton.text = "Quiz starten"
+        startQuizButton.setIconResource(R.drawable.baseline_quiz_24)
+        startQuizButton.setOnClickListener {
+            launchQuiz()  // startet Quiz und wartet auf RESULT_OK
+        }
+        startQuizButton.visibility = View.VISIBLE // Button sichtbar machen
+
+        findApeButton.visibility = View.GONE // Button ausblenden
+        startQuizButton.visibility = View.VISIBLE // Button sichtbar machen
+        findApeButton.visibility = View.GONE // Button ausblenden
+        removeArrow() // Pfeil entfernen
+        playSound(R.raw.monkeysound) // Affengeräusch abspielen
+        Handler(Looper.getMainLooper()).postDelayed({
+            speechBubble.text = "Schau mal in deine Sammlung, der Affe ist jetzt da!"
+            tts.speak(speechBubble.text.toString(), TextToSpeech.QUEUE_FLUSH, null, null)
+        }, 4000)
+
+        val missionAnimal = prefs.getString("daily_mission", "papagei")
+        if (image.name.contains(missionAnimal ?: "")) {
+            Toast.makeText(this, "🎉 Mission erfüllt!", Toast.LENGTH_LONG).show()
+            prefs.edit().putBoolean("mission_done", true).apply() // Mission erfüllt
+        }
+
+        val allAnimals = listOf("affe", "elefant", "pinguin", "löwe") // alle Tiere
+        val collected = allAnimals.count { prefs.getBoolean(it, false) } // anzahl der ge收集en Tiere
+
+        if (collected == 2 && !prefs.getBoolean("badge_tierprofi", false)) { // badge setzen
+            prefs.edit().putBoolean("badge_tierprofi", true).apply() // badge setzen
+            Toast.makeText(this, "🏅 Du bist jetzt Tierprofi!", Toast.LENGTH_LONG).show()
+        }
+
+
+    }
+    // um Affengeräusch zu machen
+    private fun playSound(resId: Int) {
+        val mp = MediaPlayer.create(this, resId)
+        mp.start()
+        mp.setOnCompletionListener { it.release() }
     }
 
-    override fun onPause() {
-        super.onPause()
+    // der affe ist für das Testen schon in der Sammlung. irrelavant da die reihenfolge wie die app
+    // benutzt wird von testsituation vorgegeben ist
+    private fun saveAnimalToCollection(animalId: String) {
+        val prefs = getSharedPreferences("animal_collection", MODE_PRIVATE) // Tiercollection
+        val editor = prefs.edit() // Tiercollection updaten
+        editor.putBoolean(animalId, true) // Tiercollection updaten
+        editor.apply() // Tiercollection updaten
+    }
+
+    private fun showArrow() {
+        arrowNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply { // Pfeil laden
+            loadModelGlbAsync("models/arrow.glb", scaleToUnits = 0.5f) {
+                startArrowAnimation()  // Startet Animation sobald geladen
+            }
+            position = Position(x = 0.5f, y = 0f, z = -1.0f) // Position setzen
+            rotation = Rotation(0f, 90f, 0f) // Drehung setzen
+        }
+        sceneView.addChild(arrowNode!!) // Pfeil in Szene platzieren
+    }
+
+    private fun startArrowAnimation() {
+        arrowAnimator?.cancel() // falls vorherige Animation läuft
+
+        arrowAnimator = ValueAnimator.ofFloat(-20f, 20f).apply {
+            duration = 800
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+
+            addUpdateListener { animator ->
+                val angle = animator.animatedValue as Float // Drehung
+                arrowNode?.rotation = Rotation(0f, 90f + angle, 0f) // Drehung setzen
+            }
+
+            start() // Animation starten
+        }
+    }
+    private fun startScanAnimation() {
+        val img = findViewById<ImageView>(R.id.imgScanning)
+        img.visibility = View.VISIBLE // Bild sichtbar machen
+        val rotate = ObjectAnimator.ofFloat(img, View.ROTATION, 0f, 360f)
+        rotate.duration = 4000
+        rotate.repeatCount = ObjectAnimator.INFINITE
+        rotate.start()
+    }
+
+    private fun removeArrow() {
+        arrowAnimator?.cancel() // falls vorherige Animation läuft
+        arrowAnimator = null // falls vorherige Animation läuft
+
+        arrowNode?.let {
+            sceneView.removeChild(it)
+            arrowNode = null
+        }
+    }
+    private fun launchQuiz() {
+        val intent = Intent(this, QuizActivity::class.java) // QuizActivity starten
+            .putExtra("animalId", "affe") // AnimalId setzen
+        quizLauncher.launch(intent) // QuizActivity starten
+    }
+    private fun resetScene() {
+        sceneView.children.filter { it !is CameraNode }.forEach { // alle Elemente aus Szene entfernen
+            sceneView.removeChild(it) // alle Elemente aus Szene entfernen
+        }
+        apeAlreadyPlaced = false // Affe nicht platziert
+        speechBubble.visibility = View.GONE // Sprechblase ausblenden
+        tts.stop() // Polly stoppen
+        removeArrow() // Pfeil entfernen
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        tts.shutdown()
+        tts.shutdown() // Polly beenden
     }
 }

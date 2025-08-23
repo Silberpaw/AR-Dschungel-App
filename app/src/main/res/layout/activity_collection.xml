@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/gradient">
+
+    <TextView
+        android:text="🎒 Deine Tiersammlung"
+        android:textSize="33sp"
+        android:fontFamily="@font/comic_reg"
+        android:textColor="#FFFFFF"
+        android:layout_gravity="center"
+        android:layout_marginBottom="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/textStars"
+            android:text="⭐ 0"
+            android:textSize="22sp"
+            android:textColor="#FFF176"
+            android:fontFamily="@font/comic_reg"
+            android:layout_marginStart="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/textBadge"
+            android:text="Titel: 🔓"
+            android:textSize="20sp"
+            android:textColor="#FFFFFF"
+            android:fontFamily="@font/comic_reg"
+            android:layout_marginStart="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <TextView
+        android:text="📈 Fortschritt"
+        android:textSize="18sp"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="4dp"
+        android:fontFamily="@font/comic_reg"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:progressTint="@color/buttonOrange"
+        android:layout_marginBottom="24dp"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:background="@android:color/white" />
+
+    <ListView
+        android:id="@+id/listView"
+        android:divider="@android:color/darker_gray"
+        android:dividerHeight="1dp"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/transparent" />
+
+</LinearLayout>

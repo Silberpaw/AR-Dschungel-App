@@ -11,32 +11,36 @@
         android:id="@+id/quizQuestion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Frage kommt hier hin!"
+        android:text="@string/frage_kommt_hier_hin"
         android:textSize="26sp"
         android:textStyle="bold"
         android:fontFamily="@font/comic_reg"
         android:gravity="center"
         android:layout_marginBottom="32dp"
-        android:textColor="#5D4037" />
+        android:textColor="#1216AB" />
 
     <Button
         android:id="@+id/answer1"
         style="@style/QuizButtonStyle"
-        android:text="Antwort 1" />
+        android:text="@string/antwort_1"
+        android:textColor="#E4CD7A"/>
 
     <Button
         android:id="@+id/answer2"
         style="@style/QuizButtonStyle"
-        android:text="Antwort 2" />
+        android:text="@string/antwort_2"
+        android:textColor="#E4CD7A"/>
 
     <Button
         android:id="@+id/answer3"
         style="@style/QuizButtonStyle"
-        android:text="Antwort 3" />
+        android:text="@string/antwort_3"
+        android:textColor="#E4CD7A"/>
 
     <Button
         android:id="@+id/answer4"
         style="@style/QuizButtonStyle"
-        android:text="Antwort 4" />
+        android:text="@string/antwort_4"
+        android:textColor="#E4CD7A"/>
 
 </LinearLayout>

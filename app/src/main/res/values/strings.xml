@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">ARApp</string>
+    <string name="antwort_1">Antwort 1</string>
+    <string name="antwort_2">Antwort 2</string>
+    <string name="antwort_3">Antwort 3</string>
+    <string name="frage_kommt_hier_hin">Frage kommt hier hin!</string>
+    <string name="antwort_4">Antwort 4</string>
+    <string name="was_m_chtest_du_als_n_chstes_machen">Was möchtest du als nächstes machen?</string>
+    <string name="papagei">Papagei</string>
+    <string name="tiere_icon">Tiere Icon</string>
+    <string name="tiere_entdecken">Tiere entdecken</string>
+    <string name="flugzeug_icon">Flugzeug Icon</string>
+    <string name="sammlung_ansehen">Sammlung ansehen</string>
+    <string name="deine_tiersammlung">Deine Tiersammlung</string>
+    <string name="foto_machen">Foto machen 📸</string>
+    <string name="mach_ein_selfie_mit_deinem_tier">Mach ein Selfie mit deinem Tier!</string>
+    <string name="tierbild">Tierbild</string>
+    <string name="affe">Affe</string>
+    <string name="herkunft_afrika_nerwartetes_alter_25_jahre_nessen_bananen_nfunfact_liebt_klettern">Herkunft: Afrika\nErwartetes Alter: 25 Jahre\nEssen: Bananen\nFunfact: Liebt Klettern!</string>
+    <string name="hallo_ich_bin_polly">Hallo, ich bin Polly!</string>
 </resources>
