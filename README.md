@@ -1,3 +1,2 @@
-# AR-Furniture
-Augmented Reality android app to visualize furniture.
-with ViedoNode in AR Scene
+# AR-App
+Mein Bachelorarbeitsprojekt. Eine Androidapp (geschrieben in Kotlin), mit welcher Kinder in AR Tiere suchen und speichern können
